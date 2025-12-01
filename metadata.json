@@ -1,0 +1,5 @@
+{
+  "name": "Neon City Sim",
+  "description": "An interactive 3D simulated city with white-model architecture, bloom effects, and interactive building selection using Three.js and React Three Fiber.",
+  "requestFramePermissions": []
+}
