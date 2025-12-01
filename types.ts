@@ -35,3 +35,25 @@ declare global {
     }
   }
 }
+
+// Augment the 'react' module's JSX namespace for compatibility with React 18+ type definitions
+declare module 'react' {
+  namespace JSX {
+    interface IntrinsicElements {
+      group: any;
+      mesh: any;
+      boxGeometry: any;
+      meshStandardMaterial: any;
+      planeGeometry: any;
+      gridHelper: any;
+      color: any;
+      fog: any;
+      ambientLight: any;
+      directionalLight: any;
+      orthographicCamera: any;
+      instancedMesh: any;
+      meshBasicMaterial: any;
+      ringGeometry: any;
+    }
+  }
+}

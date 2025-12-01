@@ -12,6 +12,7 @@ interface BuildingProps {
   depth: number;
   isHovered: boolean;
   isSelected: boolean;
+  isNight: boolean;
   onPointerOver: (e: ThreeEvent<PointerEvent>) => void;
   onPointerOut: (e: ThreeEvent<PointerEvent>) => void;
   onClick: (e: ThreeEvent<MouseEvent>) => void;
@@ -53,6 +54,7 @@ const Building: React.FC<BuildingProps> = ({
   depth,
   isHovered,
   isSelected,
+  isNight,
   onPointerOver,
   onPointerOut,
   onClick,
@@ -61,14 +63,20 @@ const Building: React.FC<BuildingProps> = ({
   const [wasSelected, setWasSelected] = useState(false);
   const [triggerEffect, setTriggerEffect] = useState(0);
 
-  // Target colors - White Model Aesthetic
-  const baseColor = new THREE.Color('#f8fafc'); // Very white grey
-  const hoverColor = new THREE.Color('#e2e8f0'); // Slightly darker on hover
-  const selectedColor = new THREE.Color('#ffffff'); // Pure white on select
+  // Target colors based on Time of Day
+  // Day: White building, Grey edges
+  // Night: Dark building, Neon edges
   
-  // Emissive
+  const baseColor = isNight ? new THREE.Color('#1e293b') : new THREE.Color('#ffffff');
+  const hoverColor = isNight ? new THREE.Color('#334155') : new THREE.Color('#f1f5f9');
+  const selectedColor = isNight ? new THREE.Color('#0f172a') : new THREE.Color('#ffffff');
+  
   const baseEmissive = new THREE.Color('#000000');
-  const selectedEmissive = new THREE.Color('#22d3ee'); // Cyan glow
+  const selectedEmissive = new THREE.Color('#22d3ee');
+
+  // Edge Colors
+  const edgeColor = isNight ? (isSelected ? "#22d3ee" : "#0ea5e9") : (isSelected ? "#0284c7" : "#cbd5e1");
+  const edgeOpacity = isNight ? (isSelected ? 1.0 : 0.6) : (isSelected ? 1.0 : 0.5);
 
   useEffect(() => {
     if (isSelected && !wasSelected) {
@@ -89,18 +97,14 @@ const Building: React.FC<BuildingProps> = ({
     if (isSelected) {
       targetColor = selectedColor;
       targetEmissive = selectedEmissive;
-      targetEmissiveIntensity = 0.5; // Subtle glow
+      targetEmissiveIntensity = isNight ? 0.8 : 0.2; 
     } else if (isHovered) {
       targetColor = hoverColor;
     }
 
-    material.color.lerp(targetColor, delta * 10);
-    material.emissive.lerp(targetEmissive, delta * 10);
-    material.emissiveIntensity = THREE.MathUtils.lerp(material.emissiveIntensity, targetEmissiveIntensity, delta * 10);
-
-    // Scale animation
-    const targetScaleY = isSelected ? 1 : 1; 
-    meshRef.current.scale.y = THREE.MathUtils.lerp(meshRef.current.scale.y, targetScaleY, delta * 10);
+    material.color.lerp(targetColor, delta * 5);
+    material.emissive.lerp(targetEmissive, delta * 5);
+    material.emissiveIntensity = THREE.MathUtils.lerp(material.emissiveIntensity, targetEmissiveIntensity, delta * 5);
   });
 
   return (
@@ -117,15 +121,15 @@ const Building: React.FC<BuildingProps> = ({
       >
         <boxGeometry args={[width, height, depth]} />
         <meshStandardMaterial
-          roughness={0.2}
-          metalness={0.1} // Plaster/White model feel
+          roughness={isNight ? 0.2 : 0.8}
+          metalness={isNight ? 0.5 : 0.1}
           color={baseColor}
         />
         <Edges
           linewidth={1.5}
           threshold={15}
-          color={isSelected ? "#22d3ee" : "#94a3b8"} // Cyan edges when selected
-          opacity={isSelected ? 0.8 : 0.3}
+          color={edgeColor}
+          opacity={edgeOpacity}
           transparent
         />
       </mesh>
