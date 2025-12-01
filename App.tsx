@@ -1,25 +1,37 @@
 
 import React, { useState, Suspense, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Environment, ContactShadows, Stars } from '@react-three/drei';
+import { OrbitControls, ContactShadows, Stars } from '@react-three/drei';
 import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
 import City from './components/City';
 import UIOverlay from './components/UIOverlay';
 import { BuildingData } from './types';
 import * as THREE from 'three';
 
+export interface AppConfig {
+  fogDistance: number;
+  bloomStrength: number;
+  autoRotate: boolean;
+  showTraffic: boolean;
+}
+
 function App() {
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingData | null>(null);
   const [timeOfDay, setTimeOfDay] = useState(14); // Start at 2 PM
+  
+  // Centralized Configuration State
+  const [config, setConfig] = useState<AppConfig>({
+    fogDistance: 180,
+    bloomStrength: 1.0,
+    autoRotate: false,
+    showTraffic: true,
+  });
 
   // Day/Night Logic
   // Night is roughly 7pm to 6am
   const isNight = timeOfDay < 6 || timeOfDay > 18.5;
   
   // Calculate sun position based on time (Simplified arc)
-  // Noon (12) -> Angle 0 (Top)
-  // 6 -> Angle -90 (Left)
-  // 18 -> Angle 90 (Right)
   const sunAngle = ((timeOfDay - 12) / 12) * Math.PI;
   const sunX = Math.sin(sunAngle) * 60;
   const sunY = Math.max(Math.cos(sunAngle) * 60, -10); // Clamp slightly
@@ -38,7 +50,10 @@ function App() {
   // Light intensities
   const ambientIntensity = isNight ? 0.2 : 0.6;
   const directionalIntensity = isNight ? 0.0 : 1.5;
-  const bloomIntensity = isNight ? 1.5 : 0.2; // Bloom is overwhelming in daylight
+  
+  // Base bloom logic
+  const baseBloom = isNight ? 1.5 : 0.2; 
+  const finalBloom = baseBloom * config.bloomStrength;
 
   return (
     <div className="relative w-full h-full transition-colors duration-1000" style={{ backgroundColor: isNight ? '#020617' : '#f1f5f9' }}>
@@ -50,14 +65,15 @@ function App() {
       >
         <color attach="background" args={[bgColor]} />
         
-        {/* Environmental Fog for depth - adjusted to be less dense */}
-        <fog attach="fog" args={[bgColor, 30, isNight ? 130 : 200]} />
+        {/* Environmental Fog controlled by settings */}
+        <fog attach="fog" args={[bgColor, 30, config.fogDistance]} />
 
         <Suspense fallback={null}>
           <group position={[0, -1, 0]}>
             <City 
                 onBuildingSelect={setSelectedBuilding} 
                 isNight={isNight}
+                showTraffic={config.showTraffic}
             />
             
             {/* Soft contact shadows on the ground */}
@@ -93,7 +109,6 @@ function App() {
             saturation={0} 
             fade 
             speed={1} 
-            
           />
 
           {/* Post Processing Effects */}
@@ -101,7 +116,7 @@ function App() {
             <Bloom 
               luminanceThreshold={isNight ? 1 : 0.9} 
               mipmapBlur 
-              intensity={bloomIntensity} 
+              intensity={finalBloom} 
               radius={0.4}
             />
             <Vignette eskil={false} offset={0.1} darkness={1.1} />
@@ -109,10 +124,11 @@ function App() {
         </Suspense>
 
         <OrbitControls 
-          autoRotate={false}
+          autoRotate={config.autoRotate}
+          autoRotateSpeed={0.5}
           maxPolarAngle={Math.PI / 2 - 0.05} // Don't go below ground
           minDistance={10}
-          maxDistance={120}
+          maxDistance={250} // Increased to allow viewing larger fog distances
           enableDamping
         />
       </Canvas>
@@ -121,6 +137,8 @@ function App() {
         selectedBuilding={selectedBuilding} 
         timeOfDay={timeOfDay}
         setTimeOfDay={setTimeOfDay}
+        config={config}
+        setConfig={setConfig}
       />
     </div>
   );

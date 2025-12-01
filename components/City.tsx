@@ -8,6 +8,7 @@ import * as THREE from 'three';
 interface CityProps {
   onBuildingSelect: (data: BuildingData | null) => void;
   isNight: boolean;
+  showTraffic: boolean;
 }
 
 // Traffic System Component
@@ -62,8 +63,6 @@ const Traffic: React.FC<{ roadsX: number[]; roadsZ: number[]; bounds: number; is
       // Dim cars during day, bright at night
       const intensity = isNight ? 1 : 0.2;
       const color = new THREE.Color(car.color).multiplyScalar(intensity); 
-      // Note: instancedMesh colors are usually not dynamic per frame easily without attributes updates or this setter
-      // setMatrixAt is fast, setColorAt is reasonably fast
       meshRef.current!.setColorAt(i, color);
     });
 
@@ -79,7 +78,7 @@ const Traffic: React.FC<{ roadsX: number[]; roadsZ: number[]; bounds: number; is
   );
 };
 
-const City: React.FC<CityProps> = ({ onBuildingSelect, isNight }) => {
+const City: React.FC<CityProps> = ({ onBuildingSelect, isNight, showTraffic }) => {
   const bounds = 25;
   
   // City Generation Logic
@@ -154,13 +153,15 @@ const City: React.FC<CityProps> = ({ onBuildingSelect, isNight }) => {
         ))}
       </group>
       
-      {/* Decorative Grid Helper - Toggle color based on time */}
+      {/* Decorative Grid Helper */}
       <gridHelper 
         args={[100, 25, isNight ? 0x334155 : 0xcbd5e1, isNight ? 0x0f172a : 0xe2e8f0]} 
         position={[0, 0.02, 0]} 
       />
 
-      <Traffic roadsX={roadsX} roadsZ={roadsZ} bounds={bounds} isNight={isNight} />
+      {showTraffic && (
+        <Traffic roadsX={roadsX} roadsZ={roadsZ} bounds={bounds} isNight={isNight} />
+      )}
 
       <BuildingsRenderer 
         buildings={buildings} 
