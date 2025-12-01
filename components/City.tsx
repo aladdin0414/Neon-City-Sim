@@ -4,7 +4,7 @@ import { useFrame, ThreeEvent } from '@react-three/fiber';
 import Building from './Building';
 import { BuildingData } from '../types';
 import * as THREE from 'three';
-import { Edges } from '@react-three/drei';
+import { Edges, Html } from '@react-three/drei';
 
 interface CityProps {
   onBuildingSelect: (data: BuildingData | null) => void;
@@ -18,13 +18,15 @@ interface CityProps {
 const Traffic: React.FC<{ roadsX: number[]; roadsZ: number[]; bounds: number; isNight: boolean }> = ({ roadsX, roadsZ, bounds, isNight }) => {
   const cars = useMemo(() => {
     const tempCars = [];
-    const carCount = 60;
+    const carCount = 120; // Increased car count for larger map
     
     for (let i = 0; i < carCount; i++) {
       const isX = Math.random() > 0.5;
       const roadSet = isX ? roadsZ : roadsX; 
+      // Safe check for empty road sets
+      if (roadSet.length === 0) continue;
+
       const fixedPos = roadSet[Math.floor(Math.random() * roadSet.length)];
-      
       const laneOffset = (Math.random() > 0.5 ? 0.5 : -0.5); 
 
       tempCars.push({
@@ -84,36 +86,53 @@ const Traffic: React.FC<{ roadsX: number[]; roadsZ: number[]; bounds: number; is
 const GhostBuilding: React.FC<{ 
   position: [number, number, number]; 
   height: number; 
-  isValid: boolean 
-}> = ({ position, height, isValid }) => {
+  validity: { valid: boolean; reason?: string } 
+}> = ({ position, height, validity }) => {
   return (
     <group position={position}>
       <mesh position={[0, height / 2, 0]}>
         <boxGeometry args={[3, height, 3]} />
         <meshBasicMaterial 
-          color={isValid ? "#22d3ee" : "#ef4444"} 
+          color={validity.valid ? "#22d3ee" : "#ef4444"} 
           transparent 
           opacity={0.4} 
           depthTest={false}
         />
-        <Edges color={isValid ? "#ffffff" : "#ff9999"} />
+        <Edges color={validity.valid ? "#ffffff" : "#ff9999"} />
       </mesh>
+      
+      {/* Feedback Label */}
+      {!validity.valid && (
+        <Html position={[0, height + 2, 0]} center>
+          <div className="px-2 py-1 bg-red-500/80 backdrop-blur-md text-white text-xs font-bold rounded shadow-lg whitespace-nowrap border border-red-400">
+            {validity.reason}
+          </div>
+        </Html>
+      )}
+      {validity.valid && (
+         <Html position={[0, height + 2, 0]} center>
+          <div className="px-2 py-1 bg-cyan-500/80 backdrop-blur-md text-white text-xs font-bold rounded shadow-lg whitespace-nowrap border border-cyan-400">
+            PLACE
+          </div>
+        </Html>
+      )}
     </group>
   );
 };
 
 const City: React.FC<CityProps> = ({ onBuildingSelect, isNight, showTraffic, isBuildMode, buildHeight }) => {
-  const bounds = 25;
+  // Expanded bounds to allow building further out
+  const bounds = 48; 
   const unitStep = 4;
-  const totalSize = 24;
+  const initialSize = 24; // Only generate initial buildings in the center
 
-  // Static Road Generation
+  // Static Road Generation covering the full bounds
   const { roadsX, roadsZ } = useMemo(() => {
     const tempRoadsX: number[] = [];
     const tempRoadsZ: number[] = [];
     
-    for (let x = -totalSize; x <= totalSize; x += unitStep) {
-      for (let z = -totalSize; z <= totalSize; z += unitStep) {
+    for (let x = -bounds; x <= bounds; x += unitStep) {
+      for (let z = -bounds; z <= bounds; z += unitStep) {
         const isRoadX = Math.abs(x) % (unitStep * 3) === 0;
         const isRoadZ = Math.abs(z) % (unitStep * 3) === 0;
         if (isRoadX && !tempRoadsX.includes(x)) tempRoadsX.push(x);
@@ -123,12 +142,12 @@ const City: React.FC<CityProps> = ({ onBuildingSelect, isNight, showTraffic, isB
     return { roadsX: tempRoadsX, roadsZ: tempRoadsZ };
   }, []);
 
-  // Initialize Buildings State
+  // Initialize Buildings State (Center city only)
   const [buildings, setBuildings] = useState<BuildingData[]>(() => {
     const tempBuildings: BuildingData[] = [];
     
-    for (let x = -totalSize; x <= totalSize; x += unitStep) {
-      for (let z = -totalSize; z <= totalSize; z += unitStep) {
+    for (let x = -initialSize; x <= initialSize; x += unitStep) {
+      for (let z = -initialSize; z <= initialSize; z += unitStep) {
         
         const isRoadX = Math.abs(x) % (unitStep * 3) === 0;
         const isRoadZ = Math.abs(z) % (unitStep * 3) === 0;
@@ -136,7 +155,7 @@ const City: React.FC<CityProps> = ({ onBuildingSelect, isNight, showTraffic, isB
         if (isRoadX || isRoadZ) continue;
 
         const dist = Math.sqrt(x * x + z * z);
-        const maxDist = Math.sqrt(totalSize * totalSize * 2);
+        const maxDist = Math.sqrt(initialSize * initialSize * 2);
         const densityThreshold = 0.4 + (dist / maxDist) * 0.4; 
         
         if (Math.random() < densityThreshold) continue;
@@ -160,21 +179,21 @@ const City: React.FC<CityProps> = ({ onBuildingSelect, isNight, showTraffic, isB
 
   // Build Mode Logic
   const [ghostPos, setGhostPos] = useState<[number, number, number] | null>(null);
-  const [isGhostValid, setIsGhostValid] = useState(false);
+  const [ghostValidity, setGhostValidity] = useState<{valid: boolean; reason?: string}>({ valid: false });
 
-  const checkValidity = (x: number, z: number) => {
+  const checkValidity = (x: number, z: number): { valid: boolean; reason?: string } => {
      // Check if it's on a road
      const isRoadX = Math.abs(x) % (unitStep * 3) === 0;
      const isRoadZ = Math.abs(z) % (unitStep * 3) === 0;
-     if (isRoadX || isRoadZ) return false;
+     if (isRoadX || isRoadZ) return { valid: false, reason: "ROAD" };
 
      // Check if occupied
      const occupied = buildings.some(b => 
         Math.abs(b.position[0] - x) < 1 && Math.abs(b.position[2] - z) < 1
      );
-     if (occupied) return false;
+     if (occupied) return { valid: false, reason: "OCCUPIED" };
 
-     return true;
+     return { valid: true };
   };
 
   const handlePlaneMove = (e: ThreeEvent<PointerEvent>) => {
@@ -188,18 +207,18 @@ const City: React.FC<CityProps> = ({ onBuildingSelect, isNight, showTraffic, isB
     const x = Math.round(e.point.x / unitStep) * unitStep;
     const z = Math.round(e.point.z / unitStep) * unitStep;
     
-    // Bounds check
-    if (x < -totalSize || x > totalSize || z < -totalSize || z > totalSize) {
+    // Check against expanded bounds
+    if (x < -bounds || x > bounds || z < -bounds || z > bounds) {
         setGhostPos(null);
         return;
     }
 
     setGhostPos([x, 0, z]);
-    setIsGhostValid(checkValidity(x, z));
+    setGhostValidity(checkValidity(x, z));
   };
 
   const handlePlaneClick = (e: ThreeEvent<MouseEvent>) => {
-    if (!isBuildMode || !ghostPos || !isGhostValid) {
+    if (!isBuildMode || !ghostPos || !ghostValidity.valid) {
         if (!isBuildMode) onBuildingSelect(null); // Deselect on bg click
         return;
     }
@@ -218,8 +237,8 @@ const City: React.FC<CityProps> = ({ onBuildingSelect, isNight, showTraffic, isB
 
     setBuildings(prev => [...prev, newBuilding]);
     
-    // Animate pop effect? (Re-validation will happen next frame)
-    setIsGhostValid(false); 
+    // Force re-validation immediately
+    setGhostValidity({ valid: false, reason: "OCCUPIED" });
   };
 
   return (
@@ -241,16 +260,16 @@ const City: React.FC<CityProps> = ({ onBuildingSelect, isNight, showTraffic, isB
         />
       </mesh>
 
-      {/* Roads */}
+      {/* Roads - Pointer events none to allow clicks to pass through to Floor */}
       <group position={[0, 0.05, 0]}>
         {roadsX.map((x, i) => (
-          <mesh key={`rx-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[x, 0, 0]} receiveShadow>
+          <mesh key={`rx-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[x, 0, 0]} receiveShadow pointerEvents="none">
              <planeGeometry args={[3, 100]} />
              <meshStandardMaterial color={isNight ? "#1e293b" : "#475569"} roughness={0.9} />
           </mesh>
         ))}
         {roadsZ.map((z, i) => (
-           <mesh key={`rz-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, z]} receiveShadow>
+           <mesh key={`rz-${i}`} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, z]} receiveShadow pointerEvents="none">
               <planeGeometry args={[100, 3]} />
               <meshStandardMaterial color={isNight ? "#1e293b" : "#475569"} roughness={0.9} />
            </mesh>
@@ -265,7 +284,7 @@ const City: React.FC<CityProps> = ({ onBuildingSelect, isNight, showTraffic, isB
 
       {/* Ghost Building for Build Mode */}
       {isBuildMode && ghostPos && (
-        <GhostBuilding position={ghostPos} height={buildHeight} isValid={isGhostValid} />
+        <GhostBuilding position={ghostPos} height={buildHeight} validity={ghostValidity} />
       )}
 
       {showTraffic && (
