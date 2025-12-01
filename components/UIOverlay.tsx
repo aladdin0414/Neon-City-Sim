@@ -9,9 +9,23 @@ interface UIOverlayProps {
   setTimeOfDay: (time: number) => void;
   config: AppConfig;
   setConfig: React.Dispatch<React.SetStateAction<AppConfig>>;
+  isBuildMode: boolean;
+  setIsBuildMode: (v: boolean) => void;
+  buildHeight: number;
+  setBuildHeight: (v: number) => void;
 }
 
-const UIOverlay: React.FC<UIOverlayProps> = ({ selectedBuilding, timeOfDay, setTimeOfDay, config, setConfig }) => {
+const UIOverlay: React.FC<UIOverlayProps> = ({ 
+  selectedBuilding, 
+  timeOfDay, 
+  setTimeOfDay, 
+  config, 
+  setConfig,
+  isBuildMode,
+  setIsBuildMode,
+  buildHeight,
+  setBuildHeight
+}) => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Format time string (e.g. 14:30)
@@ -38,7 +52,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ selectedBuilding, timeOfDay, setT
           <p className={`mt-2 text-sm max-w-xs transition-colors duration-1000 ${isNight ? 'text-slate-400' : 'text-slate-600'}`}>
             Interactive White-Model Simulation. <br/>
             <span className="font-mono text-xs opacity-70">
-              {isNight ? 'NIGHT MODE ACTIVE' : 'DAYLIGHT SIMULATION'}
+              {isBuildMode ? '/// BUILD MODE ACTIVE' : (isNight ? 'NIGHT MODE ACTIVE' : 'DAYLIGHT SIMULATION')}
             </span>
           </p>
         </div>
@@ -46,7 +60,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ selectedBuilding, timeOfDay, setT
         {/* Floating Settings Button */}
         <button 
           onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-          className="bg-slate-900/80 hover:bg-slate-800 text-cyan-400 border border-slate-700 p-3 rounded-full backdrop-blur-md transition-all shadow-lg hover:scale-110 active:scale-95 group"
+          className={`bg-slate-900/80 text-cyan-400 border border-slate-700 p-3 rounded-full backdrop-blur-md transition-all shadow-lg hover:scale-110 active:scale-95 group ${isBuildMode ? 'ring-2 ring-cyan-500' : ''}`}
           aria-label="Settings"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-700 ${isSettingsOpen ? 'rotate-180' : 'group-hover:rotate-90'}`}>
@@ -58,13 +72,50 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ selectedBuilding, timeOfDay, setT
 
       {/* Settings Panel */}
       {isSettingsOpen && (
-        <div className="absolute top-20 right-6 w-80 bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-xl p-6 pointer-events-auto shadow-2xl animate-in slide-in-from-right-10 fade-in duration-200">
+        <div className="absolute top-20 right-6 w-80 bg-slate-900/90 backdrop-blur-md border border-slate-700 rounded-xl p-6 pointer-events-auto shadow-2xl animate-in slide-in-from-right-10 fade-in duration-200 overflow-y-auto max-h-[80vh]">
           <h3 className="text-white font-bold mb-4 flex items-center gap-2">
             <span className="text-cyan-400">///</span> CONFIGURATION
           </h3>
 
           <div className="space-y-6">
             
+            {/* Build Mode Section */}
+             <div className="bg-slate-800/50 rounded-lg p-3 space-y-3 border border-slate-700">
+               <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold text-white flex items-center gap-2">
+                    <span className="w-2 h-2 bg-cyan-400 rounded-full"></span>
+                    BUILD MODE
+                  </span>
+                  <button 
+                    onClick={() => setIsBuildMode(!isBuildMode)}
+                    className={`w-10 h-5 rounded-full relative transition-colors duration-300 ${isBuildMode ? 'bg-cyan-500' : 'bg-slate-700'}`}
+                  >
+                    <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-transform duration-300 ${isBuildMode ? 'left-6' : 'left-1'}`}></div>
+                  </button>
+               </div>
+               
+               {isBuildMode && (
+                 <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                    <div className="flex justify-between text-xs font-mono text-slate-400">
+                      <span>HEIGHT</span>
+                      <span className="text-cyan-400">{buildHeight}m</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="4" 
+                      max="60" 
+                      step="1"
+                      value={buildHeight}
+                      onChange={(e) => setBuildHeight(parseInt(e.target.value))}
+                      className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                    />
+                    <p className="text-[10px] text-slate-500 pt-1">Click valid grid cells to place buildings.</p>
+                 </div>
+               )}
+            </div>
+
+            <hr className="border-slate-800" />
+
             {/* Time Control */}
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-mono text-slate-400">
@@ -187,7 +238,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({ selectedBuilding, timeOfDay, setT
 
       {/* Footer Instructions */}
       <div className={`absolute bottom-6 w-full text-center pointer-events-none text-xs font-mono transition-colors duration-1000 ${isNight ? 'text-slate-500' : 'text-slate-400'}`}>
-        LMB: SELECT • RMB: ROTATE • SCROLL: ZOOM
+        {isBuildMode ? 'BUILD MODE: LEFT CLICK TO PLACE • RIGHT CLICK TO ROTATE' : 'LMB: SELECT • RMB: ROTATE • SCROLL: ZOOM'}
       </div>
     </div>
   );

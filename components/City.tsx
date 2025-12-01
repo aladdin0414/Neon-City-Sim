@@ -1,14 +1,17 @@
 
-import React, { useMemo, useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import React, { useMemo, useRef, useState } from 'react';
+import { useFrame, ThreeEvent } from '@react-three/fiber';
 import Building from './Building';
 import { BuildingData } from '../types';
 import * as THREE from 'three';
+import { Edges } from '@react-three/drei';
 
 interface CityProps {
   onBuildingSelect: (data: BuildingData | null) => void;
   isNight: boolean;
   showTraffic: boolean;
+  isBuildMode: boolean;
+  buildHeight: number;
 }
 
 // Traffic System Component
@@ -78,26 +81,57 @@ const Traffic: React.FC<{ roadsX: number[]; roadsZ: number[]; bounds: number; is
   );
 };
 
-const City: React.FC<CityProps> = ({ onBuildingSelect, isNight, showTraffic }) => {
+const GhostBuilding: React.FC<{ 
+  position: [number, number, number]; 
+  height: number; 
+  isValid: boolean 
+}> = ({ position, height, isValid }) => {
+  return (
+    <group position={position}>
+      <mesh position={[0, height / 2, 0]}>
+        <boxGeometry args={[3, height, 3]} />
+        <meshBasicMaterial 
+          color={isValid ? "#22d3ee" : "#ef4444"} 
+          transparent 
+          opacity={0.4} 
+          depthTest={false}
+        />
+        <Edges color={isValid ? "#ffffff" : "#ff9999"} />
+      </mesh>
+    </group>
+  );
+};
+
+const City: React.FC<CityProps> = ({ onBuildingSelect, isNight, showTraffic, isBuildMode, buildHeight }) => {
   const bounds = 25;
-  
-  // City Generation Logic
-  const { buildings, roadsX, roadsZ } = useMemo(() => {
-    const tempBuildings: BuildingData[] = [];
+  const unitStep = 4;
+  const totalSize = 24;
+
+  // Static Road Generation
+  const { roadsX, roadsZ } = useMemo(() => {
     const tempRoadsX: number[] = [];
     const tempRoadsZ: number[] = [];
+    
+    for (let x = -totalSize; x <= totalSize; x += unitStep) {
+      for (let z = -totalSize; z <= totalSize; z += unitStep) {
+        const isRoadX = Math.abs(x) % (unitStep * 3) === 0;
+        const isRoadZ = Math.abs(z) % (unitStep * 3) === 0;
+        if (isRoadX && !tempRoadsX.includes(x)) tempRoadsX.push(x);
+        if (isRoadZ && !tempRoadsZ.includes(z)) tempRoadsZ.push(z);
+      }
+    }
+    return { roadsX: tempRoadsX, roadsZ: tempRoadsZ };
+  }, []);
 
-    const totalSize = 24; 
-    const unitStep = 4; 
+  // Initialize Buildings State
+  const [buildings, setBuildings] = useState<BuildingData[]>(() => {
+    const tempBuildings: BuildingData[] = [];
     
     for (let x = -totalSize; x <= totalSize; x += unitStep) {
       for (let z = -totalSize; z <= totalSize; z += unitStep) {
         
         const isRoadX = Math.abs(x) % (unitStep * 3) === 0;
         const isRoadZ = Math.abs(z) % (unitStep * 3) === 0;
-
-        if (isRoadX && !tempRoadsX.includes(x)) tempRoadsX.push(x);
-        if (isRoadZ && !tempRoadsZ.includes(z)) tempRoadsZ.push(z);
 
         if (isRoadX || isRoadZ) continue;
 
@@ -121,14 +155,84 @@ const City: React.FC<CityProps> = ({ onBuildingSelect, isNight, showTraffic }) =
         });
       }
     }
+    return tempBuildings;
+  });
 
-    return { buildings: tempBuildings, roadsX: tempRoadsX, roadsZ: tempRoadsZ };
-  }, []);
+  // Build Mode Logic
+  const [ghostPos, setGhostPos] = useState<[number, number, number] | null>(null);
+  const [isGhostValid, setIsGhostValid] = useState(false);
+
+  const checkValidity = (x: number, z: number) => {
+     // Check if it's on a road
+     const isRoadX = Math.abs(x) % (unitStep * 3) === 0;
+     const isRoadZ = Math.abs(z) % (unitStep * 3) === 0;
+     if (isRoadX || isRoadZ) return false;
+
+     // Check if occupied
+     const occupied = buildings.some(b => 
+        Math.abs(b.position[0] - x) < 1 && Math.abs(b.position[2] - z) < 1
+     );
+     if (occupied) return false;
+
+     return true;
+  };
+
+  const handlePlaneMove = (e: ThreeEvent<PointerEvent>) => {
+    if (!isBuildMode) {
+      if (ghostPos) setGhostPos(null);
+      return;
+    }
+    e.stopPropagation();
+    
+    // Snap to grid
+    const x = Math.round(e.point.x / unitStep) * unitStep;
+    const z = Math.round(e.point.z / unitStep) * unitStep;
+    
+    // Bounds check
+    if (x < -totalSize || x > totalSize || z < -totalSize || z > totalSize) {
+        setGhostPos(null);
+        return;
+    }
+
+    setGhostPos([x, 0, z]);
+    setIsGhostValid(checkValidity(x, z));
+  };
+
+  const handlePlaneClick = (e: ThreeEvent<MouseEvent>) => {
+    if (!isBuildMode || !ghostPos || !isGhostValid) {
+        if (!isBuildMode) onBuildingSelect(null); // Deselect on bg click
+        return;
+    }
+    e.stopPropagation();
+
+    const [x, , z] = ghostPos;
+    
+    // Add Building
+    const newBuilding: BuildingData = {
+        id: `custom-${Date.now()}`,
+        position: [x, 0, z],
+        height: buildHeight,
+        width: 3,
+        depth: 3
+    };
+
+    setBuildings(prev => [...prev, newBuilding]);
+    
+    // Animate pop effect? (Re-validation will happen next frame)
+    setIsGhostValid(false); 
+  };
 
   return (
     <group>
-      {/* Floor */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]} receiveShadow>
+      {/* Floor with Interaction */}
+      <mesh 
+        rotation={[-Math.PI / 2, 0, 0]} 
+        position={[0, -0.1, 0]} 
+        receiveShadow
+        onPointerMove={handlePlaneMove}
+        onClick={handlePlaneClick}
+        onPointerMissed={() => onBuildingSelect(null)}
+      >
         <planeGeometry args={[100, 100]} />
         <meshStandardMaterial 
             color={isNight ? "#020617" : "#e2e8f0"} 
@@ -158,6 +262,11 @@ const City: React.FC<CityProps> = ({ onBuildingSelect, isNight, showTraffic }) =
         args={[100, 25, isNight ? 0x334155 : 0xcbd5e1, isNight ? 0x0f172a : 0xe2e8f0]} 
         position={[0, 0.02, 0]} 
       />
+
+      {/* Ghost Building for Build Mode */}
+      {isBuildMode && ghostPos && (
+        <GhostBuilding position={ghostPos} height={buildHeight} isValid={isGhostValid} />
+      )}
 
       {showTraffic && (
         <Traffic roadsX={roadsX} roadsZ={roadsZ} bounds={bounds} isNight={isNight} />

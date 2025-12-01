@@ -19,6 +19,10 @@ function App() {
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingData | null>(null);
   const [timeOfDay, setTimeOfDay] = useState(14); // Start at 2 PM
   
+  // Build Mode State
+  const [isBuildMode, setIsBuildMode] = useState(false);
+  const [buildHeight, setBuildHeight] = useState(20);
+
   // Centralized Configuration State
   const [config, setConfig] = useState<AppConfig>({
     fogDistance: 180,
@@ -28,18 +32,15 @@ function App() {
   });
 
   // Day/Night Logic
-  // Night is roughly 7pm to 6am
   const isNight = timeOfDay < 6 || timeOfDay > 18.5;
   
-  // Calculate sun position based on time (Simplified arc)
   const sunAngle = ((timeOfDay - 12) / 12) * Math.PI;
   const sunX = Math.sin(sunAngle) * 60;
-  const sunY = Math.max(Math.cos(sunAngle) * 60, -10); // Clamp slightly
+  const sunY = Math.max(Math.cos(sunAngle) * 60, -10); 
   const sunZ = 20;
 
-  // Dynamic Colors
-  const dayBg = '#f1f5f9'; // Slate 100
-  const nightBg = '#020617'; // Slate 950
+  const dayBg = '#f1f5f9'; 
+  const nightBg = '#020617'; 
   
   const bgColor = useMemo(() => new THREE.Color().lerpColors(
     new THREE.Color(dayBg), 
@@ -47,11 +48,9 @@ function App() {
     isNight ? 1 : 0
   ), [isNight]);
 
-  // Light intensities
   const ambientIntensity = isNight ? 0.2 : 0.6;
   const directionalIntensity = isNight ? 0.0 : 1.5;
   
-  // Base bloom logic
   const baseBloom = isNight ? 1.5 : 0.2; 
   const finalBloom = baseBloom * config.bloomStrength;
 
@@ -60,12 +59,11 @@ function App() {
       <Canvas
         shadows
         camera={{ position: [25, 20, 25], fov: 45 }}
-        gl={{ antialias: false }} // Performance optimization for post-processing
+        gl={{ antialias: false }} 
         dpr={[1, 2]}
       >
         <color attach="background" args={[bgColor]} />
         
-        {/* Environmental Fog controlled by settings */}
         <fog attach="fog" args={[bgColor, 30, config.fogDistance]} />
 
         <Suspense fallback={null}>
@@ -74,9 +72,10 @@ function App() {
                 onBuildingSelect={setSelectedBuilding} 
                 isNight={isNight}
                 showTraffic={config.showTraffic}
+                isBuildMode={isBuildMode}
+                buildHeight={buildHeight}
             />
             
-            {/* Soft contact shadows on the ground */}
             <ContactShadows 
               resolution={1024} 
               scale={100} 
@@ -87,7 +86,6 @@ function App() {
             />
           </group>
 
-          {/* Lighting Setup */}
           <ambientLight intensity={ambientIntensity} color={isNight ? "#1e293b" : "#ffffff"} />
           
           <directionalLight
@@ -100,7 +98,6 @@ function App() {
             <orthographicCamera attach="shadow-camera" args={[-50, 50, 50, -50]} />
           </directionalLight>
           
-          {/* Stars only visible at night */}
           <Stars 
             radius={100} 
             depth={50} 
@@ -111,7 +108,6 @@ function App() {
             speed={1} 
           />
 
-          {/* Post Processing Effects */}
           <EffectComposer disableNormalPass>
             <Bloom 
               luminanceThreshold={isNight ? 1 : 0.9} 
@@ -126,10 +122,11 @@ function App() {
         <OrbitControls 
           autoRotate={config.autoRotate}
           autoRotateSpeed={0.5}
-          maxPolarAngle={Math.PI / 2 - 0.05} // Don't go below ground
+          maxPolarAngle={Math.PI / 2 - 0.05} 
           minDistance={10}
-          maxDistance={250} // Increased to allow viewing larger fog distances
+          maxDistance={250} 
           enableDamping
+          enabled={!isBuildMode} // Disable camera interaction slightly when building to prevent accidental spins? Or keep enabled. Let's keep enabled.
         />
       </Canvas>
 
@@ -139,6 +136,10 @@ function App() {
         setTimeOfDay={setTimeOfDay}
         config={config}
         setConfig={setConfig}
+        isBuildMode={isBuildMode}
+        setIsBuildMode={setIsBuildMode}
+        buildHeight={buildHeight}
+        setBuildHeight={setBuildHeight}
       />
     </div>
   );
